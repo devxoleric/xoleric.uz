@@ -1,0 +1,104 @@
+trigger:
+  branches:
+    include:
+    - main
+    - master
+    - release/*
+  tags:
+    include:
+    - v*
+
+variables:
+  dockerRegistryServiceConnection: 'xoleric-docker-registry'
+  imageRepository: 'xoleric'
+  containerRegistry: 'ghcr.io'
+  dockerfilePath: '**/Dockerfile'
+  tag: '$(Build.BuildId)'
+  
+  vmImageName: 'ubuntu-latest'
+
+stages:
+- stage: Build
+  displayName: Build and test stage
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: $(vmImageName)
+    
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '18.x'
+      displayName: 'Install Node.js'
+    
+    - script: |
+        cd backend
+        npm ci
+        npm run build
+        npm test
+      displayName: 'Build and test backend'
+    
+    - task: Docker@2
+      displayName: Build and push frontend image
+      inputs:
+        command: buildAndPush
+        repository: $(imageRepository)-frontend
+        dockerfile: frontend/Dockerfile.frontend
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+          $(tag)
+          latest
+    
+    - task: Docker@2
+      displayName: Build and push backend image
+      inputs:
+        command: buildAndPush
+        repository: $(imageRepository)-backend
+        dockerfile: backend/Dockerfile.backend
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+          $(tag)
+          latest
+    
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'drop'
+        publishLocation: 'Container'
+
+- stage: Deploy
+  displayName: Deploy to production
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  - deployment: Deploy
+    displayName: Deploy
+    environment: 'production'
+    pool:
+      vmImage: $(vmImageName)
+    
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+            
+          - task: SSH@0
+            inputs:
+              sshEndpoint: 'xoleric-production'
+              runOptions: 'commands'
+              commands: |
+                cd /opt/xoleric
+                docker-compose -f docker-compose.prod.yml pull
+                docker-compose -f docker-compose.prod.yml up -d --remove-orphans
+                docker image prune -f
+              readyTimeout: '20000'
+            
+          - task: AzureMonitor@1
+            inputs:
+              ConnectedServiceName: 'xoleric-monitoring'
+              ResourceGroupName: 'xoleric-rg'
+              ResourceType: 'Microsoft.Web/sites'
+              ResourceName: 'xoleric-app'
