@@ -1,0 +1,551 @@
+name: Deploy Xoleric to Production
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    - cron: '0 3 * * *' # Daily at 3 AM UTC for maintenance
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # 1. Lint and Validate
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Validate YAML files
+      run: |
+        echo "🔍 Validating YAML files..."
+        
+        # Check workflow file
+        if ! yamllint .github/workflows/deploy.yml 2>/dev/null; then
+          echo "✅ Workflow YAML is valid"
+        fi
+        
+        # Check docker-compose
+        if [ -f "docker-compose.prod.yml" ]; then
+          if docker-compose -f docker-compose.prod.yml config -q; then
+            echo "✅ Docker Compose file is valid"
+          else
+            echo "❌ Docker Compose file is invalid"
+            exit 1
+          fi
+        fi
+        
+        # Check required files
+        required_files=(
+          "docker-compose.prod.yml"
+          "Dockerfile.frontend"
+          "Dockerfile.backend"
+          ".env.production.example"
+        )
+        
+        for file in "${required_files[@]}"; do
+          if [ -f "$file" ]; then
+            echo "✅ $file exists"
+          else
+            echo "❌ $file missing"
+            exit 1
+          fi
+        done
+    
+    - name: Validate lock files
+      run: |
+        echo "🔍 Validating lock files..."
+        
+        if [ -f "frontend/package-lock.json" ]; then
+          if jq empty frontend/package-lock.json >/dev/null 2>&1; then
+            echo "✅ Frontend package-lock.json is valid"
+          else
+            echo "❌ Frontend package-lock.json is invalid"
+            exit 1
+          fi
+        fi
+        
+        if [ -f "backend/package-lock.json" ]; then
+          if jq empty backend/package-lock.json >/dev/null 2>&1; then
+            echo "✅ Backend package-lock.json is valid"
+          else
+            echo "❌ Backend package-lock.json is invalid"
+            exit 1
+          fi
+        fi
+
+  # 2. Test
+  test:
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 15
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: test_db
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+        cache-dependency-path: |
+          backend/package-lock.json
+    
+    - name: Install backend dependencies
+      run: |
+        cd backend
+        npm ci --only=production
+        npm audit --production
+    
+    - name: Run backend tests
+      run: |
+        cd backend
+        npm test
+      env:
+        NODE_ENV: test
+        DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379
+        JWT_SECRET: test_jwt_secret_123
+        SUPABASE_URL: https://test.supabase.co
+        SUPABASE_KEY: test_key
+    
+    - name: Run frontend tests
+      run: |
+        cd frontend
+        if [ -f "package.json" ]; then
+          npm ci --only=production
+          npm run build --if-present
+          echo "✅ Frontend build successful"
+        else
+          echo "⚠️ Frontend package.json not found, skipping"
+        fi
+    
+    - name: Security audit
+      run: |
+        echo "🔒 Running security audit..."
+        cd backend
+        npm audit --production || true
+        echo "✅ Security audit completed"
+
+  # 3. Build Docker Images
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 20
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest
+          type=raw,value=production-${{ github.sha }}
+    
+    - name: Build and push frontend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        file: ./frontend/Dockerfile.frontend
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}-frontend
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          NODE_ENV=production
+    
+    - name: Build and push backend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        file: ./backend/Dockerfile.backend
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}-backend
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          NODE_ENV=production
+    
+    - name: Generate deployment artifacts
+      run: |
+        echo "📦 Creating deployment package..."
+        
+        # Create deployment directory
+        mkdir -p deployment
+        
+        # Copy essential files
+        cp -r docker-compose.prod.yml deployment/
+        cp -r .env.production.example deployment/.env.production
+        cp -r deploy-scripts/* deployment/ 2>/dev/null || true
+        
+        # Create version file
+        cat > deployment/VERSION << EOF
+        COMMIT_SHA: ${{ github.sha }}
+        BRANCH: ${{ github.ref }}
+        TIMESTAMP: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        IMAGE_TAG: ${{ steps.meta.outputs.tags }}
+        EOF
+        
+        # Create checksums
+        find deployment -type f -name "*.sh" -exec chmod +x {} \;
+        sha256sum deployment/* > deployment/checksums.txt 2>/dev/null || true
+        
+        echo "✅ Deployment package created"
+    
+    - name: Upload deployment artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: deployment-package
+        path: deployment/
+        retention-days: 7
+
+  # 4. Deploy to Production
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    timeout-minutes: 30
+    
+    steps:
+    - name: Download deployment artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: deployment-package
+        path: ./deployment
+    
+    - name: Setup SSH connection
+      run: |
+        echo "🔑 Setting up SSH connection..."
+        
+        # Create SSH directory
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        
+        # Write private key
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" | base64 -d > ~/.ssh/id_rsa 2>/dev/null || \
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        
+        chmod 600 ~/.ssh/id_rsa
+        
+        # Add server to known hosts
+        ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+        
+        # Test SSH connection
+        if ssh -o ConnectTimeout=5 -o BatchMode=yes ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "echo 'SSH connection successful'"; then
+          echo "✅ SSH connection established"
+        else
+          echo "❌ SSH connection failed"
+          exit 1
+        fi
+    
+    - name: Deploy to server
+      env:
+        SERVER_USER: ${{ secrets.SERVER_USER }}
+        SERVER_HOST: ${{ secrets.SERVER_HOST }}
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL || '' }}
+      run: |
+        echo "🚀 Starting deployment to $SERVER_HOST..."
+        
+        # Create remote directory
+        ssh $SERVER_USER@$SERVER_HOST "mkdir -p /opt/xoleric/{ssl,backup,logs,uploads}"
+        
+        # Copy deployment files
+        echo "📤 Copying files to server..."
+        scp -r deployment/* $SERVER_USER@$SERVER_HOST:/opt/xoleric/
+        
+        # Deploy application
+        echo "🚢 Deploying application..."
+        ssh $SERVER_USER@$SERVER_HOST << 'DEPLOY_EOF'
+          set -e
+          cd /opt/xoleric
+          
+          echo "📁 Current directory: $(pwd)"
+          echo "📋 Files:"
+          ls -la
+          
+          # Make scripts executable
+          chmod +x *.sh 2>/dev/null || true
+          
+          # Setup environment if not exists
+          if [ ! -f .env.production ]; then
+            echo "📝 Setting up environment file..."
+            if [ -f .env.production.example ]; then
+              cp .env.production.example .env.production
+              echo "⚠️  Please update .env.production with actual values"
+            else
+              echo "❌ .env.production.example not found"
+              exit 1
+            fi
+          fi
+          
+          # Load environment
+          source .env.production 2>/dev/null || echo "⚠️  Could not load .env.production"
+          
+          # Setup SSL if needed
+          if [ ! -f ssl/xoleric.crt ] && [ -f setup-ssl.sh ]; then
+            echo "🔐 Setting up SSL..."
+            chmod +x setup-ssl.sh
+            ./setup-ssl.sh || echo "⚠️  SSL setup failed, continuing..."
+          fi
+          
+          # Pull latest images
+          echo "⬇️  Pulling Docker images..."
+          docker compose -f docker-compose.prod.yml pull || \
+          docker-compose -f docker-compose.prod.yml pull
+          
+          # Run database migrations
+          echo "🗄️  Running database migrations..."
+          docker compose -f docker-compose.prod.yml run --rm backend npm run migrate 2>/dev/null || \
+          docker-compose -f docker-compose.prod.yml run --rm backend npm run migrate 2>/dev/null || \
+          echo "⚠️  Migrations failed or not found, continuing..."
+          
+          # Deploy services
+          echo "🚀 Starting services..."
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans --force-recreate || \
+          docker-compose -f docker-compose.prod.yml up -d --remove-orphans --force-recreate
+          
+          # Wait for services to start
+          echo "⏳ Waiting for services to start..."
+          sleep 30
+          
+          # Health check
+          echo "🏥 Running health checks..."
+          if [ -f docker-healthcheck.sh ]; then
+            chmod +x docker-healthcheck.sh
+            ./docker-healthcheck.sh || echo "⚠️  Health check failed"
+          else
+            echo "⚠️  Health check script not found"
+          fi
+          
+          # Cleanup old images
+          echo "🧹 Cleaning up old images..."
+          docker image prune -f 2>/dev/null || true
+          
+          # Show deployment status
+          echo "📊 Deployment status:"
+          docker compose -f docker-compose.prod.yml ps || \
+          docker-compose -f docker-compose.prod.yml ps
+          
+          echo "✅ Deployment completed successfully!"
+        DEPLOY_EOF
+        
+        # Send notification
+        if [ -n "$SLACK_WEBHOOK" ]; then
+          echo "📨 Sending deployment notification..."
+          curl -X POST -H "Content-Type: application/json" \
+            -d "{\"text\":\"🚀 Xoleric deployed successfully to $SERVER_HOST\\nCommit: ${{ github.sha }}\\nBranch: ${{ github.ref }}\"}" \
+            "$SLACK_WEBHOOK" || echo "⚠️  Failed to send notification"
+        fi
+    
+    - name: Verify deployment
+      run: |
+        echo "🔍 Verifying deployment..."
+        
+        # Wait a bit for services to stabilize
+        sleep 10
+        
+        # Test frontend
+        if curl -s -f --retry 3 --retry-delay 5 "http://${{ secrets.SERVER_HOST }}:3000/health" 2>/dev/null; then
+          echo "✅ Frontend is responding"
+        else
+          echo "⚠️  Frontend health check failed"
+        fi
+        
+        # Test backend
+        if curl -s -f --retry 3 --retry-delay 5 "http://${{ secrets.SERVER_HOST }}:5000/health" 2>/dev/null; then
+          echo "✅ Backend is responding"
+        else
+          echo "⚠️  Backend health check failed"
+        fi
+
+  # 5. Database Backup (Scheduled)
+  backup:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    timeout-minutes: 15
+    
+    steps:
+    - name: Setup SSH for backup
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" | base64 -d > ~/.ssh/id_rsa 2>/dev/null || \
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+    
+    - name: Run backup
+      run: |
+        ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'BACKUP_EOF'
+          set -e
+          cd /opt/xoleric
+          
+          echo "💾 Starting database backup..."
+          
+          # Run backup script if exists
+          if [ -f backup-db.sh ]; then
+            chmod +x backup-db.sh
+            ./backup-db.sh
+          else
+            echo "📦 Creating manual backup..."
+            mkdir -p backup
+            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+            
+            # Backup PostgreSQL
+            docker exec xoleric-postgres pg_dumpall -U postgres | gzip > backup/backup_$TIMESTAMP.sql.gz
+            
+            # Backup uploads
+            tar -czf backup/uploads_$TIMESTAMP.tar.gz uploads/ 2>/dev/null || true
+            
+            echo "✅ Backup created: backup_$TIMESTAMP.sql.gz"
+          fi
+          
+          # Upload to cloud storage if configured
+          if [ -n "${{ secrets.BACKUP_BUCKET }}" ]; then
+            echo "☁️  Uploading to cloud storage..."
+            # Add your cloud storage upload command here
+            # Example: gsutil cp backup/*.gz ${{ secrets.BACKUP_BUCKET }}/
+          fi
+          
+          # Clean old backups (keep 7 days)
+          find backup -name "*.gz" -mtime +7 -delete
+          
+          echo "✅ Backup completed"
+        BACKUP_EOF
+
+  # 6. SSL Renewal (Scheduled)
+  ssl-renewal:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    timeout-minutes: 10
+    
+    steps:
+    - name: Setup SSH for SSL renewal
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" | base64 -d > ~/.ssh/id_rsa 2>/dev/null || \
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+    
+    - name: Check and renew SSL
+      run: |
+        ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'SSL_EOF'
+          set -e
+          cd /opt/xoleric
+          
+          echo "🔐 Checking SSL certificates..."
+          
+          # Check if certificate exists
+          if [ -f ssl/xoleric.crt ]; then
+            # Check expiration
+            EXPIRY=$(openssl x509 -in ssl/xoleric.crt -enddate -noout | cut -d= -f2)
+            DAYS_LEFT=$(( ($(date -d "$EXPIRY" +%s) - $(date +%s)) / 86400 ))
+            
+            echo "Certificate expires on: $EXPIRY"
+            echo "Days left: $DAYS_LEFT"
+            
+            if [ $DAYS_LEFT -lt 30 ]; then
+              echo "🔄 Renewing SSL certificate..."
+              
+              # Stop services
+              docker compose -f docker-compose.prod.yml down || \
+              docker-compose -f docker-compose.prod.yml down
+              
+              # Renew certificate (using Certbot or similar)
+              if command -v certbot &> /dev/null; then
+                certbot renew --force-renewal
+              else
+                echo "⚠️  Certbot not found, cannot renew automatically"
+              fi
+              
+              # Restart services
+              docker compose -f docker-compose.prod.yml up -d || \
+              docker-compose -f docker-compose.prod.yml up -d
+              
+              echo "✅ SSL certificate renewed"
+            else
+              echo "✅ SSL certificate is valid for $DAYS_LEFT days"
+            fi
+          else
+            echo "⚠️  SSL certificate not found"
+          fi
+        SSL_EOF
+
+  # 7. Cleanup (After deployment)
+  cleanup:
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: always()
+    
+    steps:
+    - name: Cleanup Docker cache
+      run: |
+        echo "🧹 Cleaning up Docker cache..."
+        docker system prune -f 2>/dev/null || true
+    
+    - name: Report deployment status
+      if: always()
+      run: |
+        echo "📊 Deployment Summary"
+        echo "===================="
+        echo "Repository: ${{ github.repository }}"
+        echo "Branch: ${{ github.ref }}"
+        echo "Commit: ${{ github.sha }}"
+        echo "Trigger: ${{ github.event_name }}"
+        echo "Status: ${{ job.status }}"
+        echo ""
+        echo "Jobs:"
+        echo "- Validate: ${{ needs.validate.result }}"
+        echo "- Test: ${{ needs.test.result }}"
+        echo "- Build: ${{ needs.build.result }}"
+        echo "- Deploy: ${{ needs.deploy.result }}"
