@@ -1,0 +1,1899 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xoleric - Ijtimoiy Tarmoq</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>◈</text></svg>">
+    
+    <!-- CSS qismi (qisqartirilgan) -->
+    <style>
+        /* ... CSS kodlari bir xil ... */
+        
+        /* Yangi qo'shimchalar */
+        .auth-modal {
+            max-width: 400px;
+        }
+        
+        .auth-tabs {
+            display: flex;
+            gap: var(--space-xs);
+            margin-bottom: var(--space-xl);
+        }
+        
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-lg);
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: var(--space-md) var(--space-lg);
+            background: var(--color-bg-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            color: var(--color-text-primary);
+            font-size: var(--font-size-md);
+            transition: var(--transition-base);
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--color-accent);
+            box-shadow: var(--glow-accent);
+        }
+        
+        .form-error {
+            color: var(--color-error);
+            font-size: var(--font-size-sm);
+            margin-top: var(--space-xs);
+            display: none;
+        }
+        
+        .online-indicator {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 12px;
+            height: 12px;
+            background: var(--color-success);
+            border-radius: var(--radius-full);
+            border: 2px solid var(--color-bg-surface);
+            z-index: 1;
+        }
+        
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            color: var(--color-text-tertiary);
+            font-size: var(--font-size-sm);
+        }
+        
+        .typing-dots {
+            display: flex;
+            gap: 2px;
+        }
+        
+        .typing-dot {
+            width: 4px;
+            height: 4px;
+            background: var(--color-text-tertiary);
+            border-radius: var(--radius-full);
+            animation: pulse-soft 1.5s ease-in-out infinite;
+        }
+        
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        
+        .comment-section {
+            margin-top: var(--space-lg);
+            border-top: 1px solid var(--color-border);
+            padding-top: var(--space-lg);
+        }
+        
+        .comment-input-container {
+            display: flex;
+            gap: var(--space-md);
+            margin-bottom: var(--space-lg);
+        }
+        
+        .comment-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-md);
+            background: var(--gradient-primary);
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+        }
+        
+        .comment-input {
+            flex: 1;
+            min-height: 40px;
+            padding: var(--space-sm) var(--space-md);
+            background: var(--color-bg-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            color: var(--color-text-primary);
+            font-size: var(--font-size-md);
+            resize: none;
+            outline: none;
+            transition: var(--transition-base);
+        }
+        
+        .comment-input:focus {
+            border-color: var(--color-accent);
+            box-shadow: var(--glow-accent);
+        }
+        
+        .comments-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+        
+        .comment-item {
+            padding: var(--space-md);
+            background: var(--color-bg-surface);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--color-border);
+        }
+        
+        .comment-header {
+            display: flex;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-sm);
+        }
+        
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 600px;
+            max-height: 70vh;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--space-lg);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+        
+        .chat-input-container {
+            padding: var(--space-lg);
+            border-top: 1px solid var(--color-border);
+            display: flex;
+            gap: var(--space-md);
+            align-items: flex-end;
+        }
+        
+        .message {
+            max-width: 70%;
+            padding: var(--space-md) var(--space-lg);
+            border-radius: var(--radius-lg);
+            position: relative;
+        }
+        
+        .message.sent {
+            background: var(--gradient-primary);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: var(--radius-xs);
+        }
+        
+        .message.received {
+            background: var(--color-bg-surface);
+            border: 1px solid var(--color-border);
+            align-self: flex-start;
+            border-bottom-left-radius: var(--radius-xs);
+        }
+        
+        .message-time {
+            font-size: var(--font-size-xs);
+            opacity: 0.7;
+            margin-top: var(--space-xs);
+            text-align: right;
+        }
+        
+        .emoji-picker {
+            position: absolute;
+            bottom: 100%;
+            right: 0;
+            background: var(--color-bg-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-md);
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: var(--space-sm);
+            z-index: var(--z-popover);
+            display: none;
+        }
+        
+        .emoji-picker.active {
+            display: grid;
+            animation: scaleIn var(--transition-bounce);
+        }
+        
+        .emoji-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-md);
+            background: transparent;
+            border: none;
+            font-size: var(--font-size-lg);
+            cursor: pointer;
+            transition: var(--transition-base);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .emoji-btn:hover {
+            background: var(--color-bg-surface-hover);
+            transform: scale(1.1);
+        }
+        
+        .trending-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-xl);
+        }
+        
+        .trending-tag {
+            padding: var(--space-sm) var(--space-md);
+            background: var(--color-bg-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-full);
+            color: var(--color-text-secondary);
+            font-size: var(--font-size-sm);
+            cursor: pointer;
+            transition: var(--transition-base);
+        }
+        
+        .trending-tag:hover {
+            background: var(--color-bg-surface-hover);
+            color: var(--color-text-primary);
+            transform: translateY(-1px);
+        }
+        
+        .trending-tag.trending {
+            background: var(--gradient-primary);
+            color: white;
+            border-color: transparent;
+        }
+        
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            color: var(--color-error);
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            animation: pulse-soft 2s ease-in-out infinite;
+        }
+        
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--color-error);
+            border-radius: var(--radius-full);
+            animation: ping 1.5s ease-in-out infinite;
+        }
+        
+        .poll-container {
+            margin: var(--space-lg) 0;
+            padding: var(--space-lg);
+            background: var(--color-bg-surface);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--color-border);
+        }
+        
+        .poll-question {
+            font-weight: 600;
+            margin-bottom: var(--space-lg);
+        }
+        
+        .poll-option {
+            margin-bottom: var(--space-md);
+            cursor: pointer;
+        }
+        
+        .poll-bar {
+            height: 8px;
+            background: var(--color-bg-secondary);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+            margin-top: var(--space-xs);
+        }
+        
+        .poll-fill {
+            height: 100%;
+            background: var(--gradient-primary);
+            border-radius: var(--radius-full);
+            transition: width var(--transition-slow);
+        }
+        
+        .poll-percentage {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-tertiary);
+            margin-top: var(--space-xs);
+        }
+        
+        .admin-badge {
+            background: var(--gradient-warning);
+            color: white;
+            padding: 2px 8px;
+            border-radius: var(--radius-full);
+            font-size: var(--font-size-xs);
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .verified-badge {
+            color: var(--color-accent);
+            font-size: var(--font-size-sm);
+        }
+        
+        .nsfw-warning {
+            background: var(--color-error-light);
+            border: 1px solid var(--color-error);
+            border-radius: var(--radius-md);
+            padding: var(--space-lg);
+            text-align: center;
+            margin-bottom: var(--space-lg);
+        }
+        
+        .nsfw-toggle {
+            color: var(--color-accent);
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .scheduled-post {
+            background: var(--color-warning-light);
+            border-left: 4px solid var(--color-warning);
+        }
+        
+        .post-analytics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: var(--space-md);
+            margin-top: var(--space-lg);
+            padding: var(--space-lg);
+            background: var(--color-bg-surface);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--color-border);
+        }
+        
+        .analytic-item {
+            text-align: center;
+        }
+        
+        .analytic-value {
+            font-size: var(--font-size-xl);
+            font-weight: 800;
+            color: var(--color-text-primary);
+            margin-bottom: var(--space-xs);
+        }
+        
+        .analytic-label {
+            font-size: var(--font-size-xs);
+            color: var(--color-text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .dark-mode-toggle {
+            position: fixed;
+            bottom: var(--space-xl);
+            right: var(--space-xl);
+            width: 56px;
+            height: 56px;
+            background: var(--color-bg-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-full);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition-base);
+            z-index: var(--z-fixed);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .dark-mode-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: var(--shadow-xl);
+        }
+        
+        .dark-mode-toggle i {
+            font-size: var(--font-size-lg);
+            transition: var(--transition-base);
+        }
+        
+        body.light-mode .dark-mode-toggle i.fa-sun {
+            display: none;
+        }
+        
+        body.light-mode .dark-mode-toggle i.fa-moon {
+            display: block;
+        }
+        
+        body:not(.light-mode) .dark-mode-toggle i.fa-sun {
+            display: block;
+        }
+        
+        body:not(.light-mode) .dark-mode-toggle i.fa-moon {
+            display: none;
+        }
+        
+        /* Chatbot */
+        .chatbot-toggle {
+            position: fixed;
+            bottom: calc(var(--space-xl) + 70px);
+            right: var(--space-xl);
+            width: 56px;
+            height: 56px;
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: var(--radius-full);
+            color: white;
+            font-size: var(--font-size-lg);
+            cursor: pointer;
+            transition: var(--transition-base);
+            z-index: var(--z-fixed);
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .chatbot-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: var(--shadow-xl);
+        }
+        
+        .chatbot-container {
+            position: fixed;
+            bottom: calc(var(--space-xl) + 140px);
+            right: var(--space-xl);
+            width: 350px;
+            height: 500px;
+            background: var(--color-bg-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-xl);
+            display: none;
+            flex-direction: column;
+            z-index: var(--z-modal);
+            overflow: hidden;
+        }
+        
+        .chatbot-container.active {
+            display: flex;
+            animation: scaleIn var(--transition-bounce);
+        }
+        
+        /* Voice message */
+        .voice-message-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-full);
+            background: var(--color-bg-surface);
+            border: 1px solid var(--color-border);
+            color: var(--color-text-primary);
+            cursor: pointer;
+            transition: var(--transition-base);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .voice-message-btn.recording {
+            background: var(--color-error);
+            color: white;
+            animation: pulse-soft 1s ease-in-out infinite;
+        }
+        
+        .voice-message {
+            padding: var(--space-md);
+            background: var(--color-bg-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+        
+        .voice-waveform {
+            flex: 1;
+            height: 40px;
+            background: linear-gradient(90deg, 
+                var(--color-accent) 0%, 
+                var(--color-accent-hover) 50%, 
+                var(--color-accent) 100%);
+            border-radius: var(--radius-md);
+            animation: shimmer 2s infinite;
+        }
+        
+        .voice-duration {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-tertiary);
+        }
+        
+        /* Story */
+        .stories-container {
+            display: flex;
+            gap: var(--space-md);
+            overflow-x: auto;
+            padding: var(--space-md) 0;
+            margin-bottom: var(--space-xl);
+            scrollbar-width: none;
+        }
+        
+        .stories-container::-webkit-scrollbar {
+            display: none;
+        }
+        
+        .story-item {
+            width: 80px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--space-xs);
+            cursor: pointer;
+        }
+        
+        .story-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: var(--radius-full);
+            background: var(--gradient-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            position: relative;
+            padding: 2px;
+        }
+        
+        .story-avatar::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            background: var(--gradient-primary);
+            border-radius: var(--radius-full);
+            z-index: -1;
+        }
+        
+        .story-avatar.viewed::before {
+            background: var(--color-border);
+        }
+        
+        .story-username {
+            font-size: var(--font-size-xs);
+            color: var(--color-text-tertiary);
+            text-align: center;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .story-viewer {
+            position: fixed;
+            inset: 0;
+            background: var(--color-bg-primary);
+            z-index: var(--z-modal);
+            display: none;
+        }
+        
+        .story-viewer.active {
+            display: block;
+        }
+        
+        .story-progress {
+            position: absolute;
+            top: var(--space-md);
+            left: var(--space-md);
+            right: var(--space-md);
+            height: 3px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+        }
+        
+        .story-progress-bar {
+            height: 100%;
+            background: white;
+            width: 0%;
+            transition: width linear;
+        }
+        
+        /* End of new styles */
+    </style>
+</head>
+<body>
+    <!-- Background Effects -->
+    <div class="bg-effects">
+        <div class="bg-grid"></div>
+        <div class="bg-glow"></div>
+        <div class="bg-particles" id="particles"></div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div class="modal-overlay" id="authModal">
+        <div class="modal auth-modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Xoleric ga Kirish</h2>
+                <button class="modal-close" onclick="App.closeAuthModal()" aria-label="Yopish">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="auth-tabs">
+                    <button class="search-tab active" onclick="App.setAuthTab('login')">
+                        Kirish
+                    </button>
+                    <button class="search-tab" onclick="App.setAuthTab('register')">
+                        Ro'yxatdan o'tish
+                    </button>
+                </div>
+                
+                <form class="auth-form" id="loginForm">
+                    <div class="form-group">
+                        <input type="email" class="form-input" placeholder="Email" id="loginEmail" required>
+                        <div class="form-error" id="loginEmailError"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <input type="password" class="form-input" placeholder="Parol" id="loginPassword" required>
+                        <div class="form-error" id="loginPasswordError"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="flex items-center gap-sm cursor-pointer">
+                            <input type="checkbox" id="rememberMe">
+                            <span class="text-sm">Meni eslab qol</span>
+                        </label>
+                    </div>
+                    
+                    <button type="submit" class="post-submit-btn">
+                        <i class="fas fa-sign-in-alt"></i>
+                        Kirish
+                    </button>
+                    
+                    <div class="text-center">
+                        <button type="button" class="text-accent text-sm" onclick="App.openResetPassword()">
+                            Parolni unutdingizmi?
+                        </button>
+                    </div>
+                </form>
+                
+                <form class="auth-form" id="registerForm" style="display: none;">
+                    <div class="form-group">
+                        <input type="text" class="form-input" placeholder="Ism" id="registerName" required>
+                        <div class="form-error" id="registerNameError"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <input type="email" class="form-input" placeholder="Email" id="registerEmail" required>
+                        <div class="form-error" id="registerEmailError"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <input type="text" class="form-input" placeholder="Username" id="registerUsername" required>
+                        <div class="form-error" id="registerUsernameError"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <input type="password" class="form-input" placeholder="Parol" id="registerPassword" required>
+                        <div class="form-error" id="registerPasswordError"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <input type="password" class="form-input" placeholder="Parolni tasdiqlash" id="registerConfirmPassword" required>
+                        <div class="form-error" id="registerConfirmPasswordError"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="flex items-center gap-sm cursor-pointer">
+                            <input type="checkbox" id="acceptTerms" required>
+                            <span class="text-sm">
+                                <a href="#" class="text-accent" onclick="App.openTerms()">Foydalanish shartlari</a> bilan roziman
+                            </span>
+                        </label>
+                        <div class="form-error" id="termsError"></div>
+                    </div>
+                    
+                    <button type="submit" class="post-submit-btn">
+                        <i class="fas fa-user-plus"></i>
+                        Ro'yxatdan o'tish
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dark Mode Toggle -->
+    <button class="dark-mode-toggle" onclick="App.toggleDarkMode()" aria-label="Tema o'zgartirish">
+        <i class="fas fa-sun"></i>
+        <i class="fas fa-moon"></i>
+    </button>
+    
+    <!-- Chatbot Toggle -->
+    <button class="chatbot-toggle" onclick="App.toggleChatbot()" aria-label="Chatbot">
+        <i class="fas fa-robot"></i>
+    </button>
+    
+    <!-- Chatbot Container -->
+    <div class="chatbot-container" id="chatbot">
+        <div class="modal-header">
+            <h2 class="modal-title">Xoleric Yordamchi</h2>
+            <button class="modal-close" onclick="App.toggleChatbot()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="chat-messages" id="chatbotMessages">
+            <div class="message received">
+                Salom! Men Xoleric yordamchiman. Sizga qanday yordam bera olaman?
+            </div>
+        </div>
+        
+        <div class="chat-input-container">
+            <input type="text" class="form-input" id="chatbotInput" placeholder="Xabar yozing...">
+            <button class="voice-message-btn" onclick="App.toggleVoiceInput()">
+                <i class="fas fa-microphone"></i>
+            </button>
+            <button class="post-submit-btn" onclick="App.sendChatbotMessage()">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- ... Qolgan HTML kodlar bir xil ... -->
+
+    <!-- Yangi modallar -->
+    <div class="modal-overlay" id="commentModal">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2 class="modal-title">Izohlar</h2>
+                <button class="modal-close" onclick="App.closeCommentModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="comment-input-container">
+                    <div class="comment-avatar" id="commentUserAvatar">
+                        U
+                    </div>
+                    <textarea class="comment-input" id="commentInput" placeholder="Izoh yozing..."></textarea>
+                    <button class="post-submit-btn" onclick="App.addComment()">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+                
+                <div class="comments-list" id="commentsList">
+                    <!-- Comments will load here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="modal-overlay" id="chatModal">
+        <div class="modal" style="max-width: 800px; height: 80vh;">
+            <div class="modal-header">
+                <div class="flex items-center gap-md">
+                    <div class="user-avatar online" style="width: 40px; height: 40px;">
+                        A
+                    </div>
+                    <div>
+                        <div class="user-display-name">Alisher</div>
+                        <div class="typing-indicator" id="typingIndicator" style="display: none;">
+                            <span>yozmoqda...</span>
+                            <div class="typing-dots">
+                                <div class="typing-dot"></div>
+                                <div class="typing-dot"></div>
+                                <div class="typing-dot"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="App.closeChatModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages">
+                    <!-- Chat messages will load here -->
+                </div>
+                
+                <div class="chat-input-container">
+                    <button class="emoji-btn" onclick="App.toggleEmojiPicker()">
+                        <i class="fas fa-smile"></i>
+                    </button>
+                    <textarea class="comment-input" id="chatInput" placeholder="Xabar yozing..." rows="1"></textarea>
+                    <button class="voice-message-btn" id="voiceMessageBtn" onclick="App.toggleVoiceRecording()">
+                        <i class="fas fa-microphone"></i>
+                    </button>
+                    <button class="post-submit-btn" onclick="App.sendChatMessage()">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+                
+                <div class="emoji-picker" id="emojiPicker">
+                    <!-- Emojis will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Story Viewer -->
+    <div class="story-viewer" id="storyViewer">
+        <div class="story-progress">
+            <div class="story-progress-bar" id="storyProgress"></div>
+        </div>
+        
+        <div class="flex items-center justify-between" style="position: absolute; top: var(--space-lg); left: var(--space-lg); right: var(--space-lg);">
+            <div class="flex items-center gap-md">
+                <div class="user-avatar" style="width: 40px; height: 40px;">
+                    U
+                </div>
+                <div>
+                    <div class="user-display-name">Foydalanuvchi</div>
+                    <div class="text-xs text-secondary">2 soat oldin</div>
+                </div>
+            </div>
+            
+            <button class="modal-close" onclick="App.closeStoryViewer()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
+            <div style="font-size: var(--font-size-3xl); color: white;">Story Content</div>
+        </div>
+    </div>
+
+    <!-- ... Qolgan modallar bir xil ... -->
+
+    <!-- JavaScript qismi yangilangan -->
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/socket.io-client@4.5.4/dist/socket.io.min.js"></script>
+    
+    <script>
+        // ==================== KONFIGURATSIYA ====================
+        const Config = {
+            SUPABASE_URL: 'https://jkjymmjwqlaictcbuhsy.supabase.co',
+            SUPABASE_KEY: 'sb_publishable__JAeSZYC_bkK2i_SMgDJQw_rycmwDs_',
+            
+            // WebSocket server
+            WS_URL: 'wss://xoleric-ws.example.com',
+            
+            // API endpoints
+            API_BASE_URL: 'https://api.xoleric.uz',
+            
+            // Post settings
+            MAX_POST_LENGTH: 2000,
+            MAX_BIO_LENGTH: 200,
+            POSTS_PER_PAGE: 20,
+            
+            // Avatar settings
+            AVATAR_MAX_SIZE: 5 * 1024 * 1024,
+            AVATAR_ALLOWED_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+            
+            // Chat settings
+            MESSAGE_LIMIT: 100,
+            
+            // Feature flags
+            FEATURES: {
+                VOICE_MESSAGES: true,
+                STORIES: true,
+                POLLS: true,
+                EMOJI_PICKER: true,
+                DARK_MODE: true,
+                PUSH_NOTIFICATIONS: false,
+                OFFLINE_MODE: true
+            },
+            
+            // Cache settings
+            CACHE_TTL: {
+                POSTS: 5 * 60 * 1000,
+                USER_DATA: 30 * 60 * 1000,
+                SEARCH_RESULTS: 2 * 60 * 1000
+            },
+            
+            // Security
+            RATE_LIMIT: {
+                POSTS: 10, // posts per minute
+                COMMENTS: 30, // comments per minute
+                LIKES: 60, // likes per minute
+                FOLLOWS: 20 // follows per minute
+            }
+        };
+
+        // ==================== TO'LIQ ILOVA ====================
+        class XolericApp {
+            constructor() {
+                this.supabase = null;
+                this.socket = null;
+                this.user = null;
+                this.token = null;
+                this.isAuthenticated = false;
+                this.onlineUsers = new Set();
+                this.typingUsers = new Map();
+                this.notifications = [];
+                this.posts = [];
+                this.messages = new Map();
+                this.stories = [];
+                this.isInitialized = false;
+                this.rateLimitCounters = new Map();
+                this.voiceRecorder = null;
+                this.isRecording = false;
+                this.mediaRecorder = null;
+                this.audioChunks = [];
+                
+                // Global instance
+                window.App = this;
+            }
+
+            async init() {
+                try {
+                    this.showLoading('Ilova yuklanmoqda...');
+                    
+                    // Supabase ni ishga tushirish
+                    this.supabase = window.supabase.createClient(
+                        Config.SUPABASE_URL,
+                        Config.SUPABASE_KEY,
+                        {
+                            auth: {
+                                autoRefreshToken: true,
+                                persistSession: true,
+                                detectSessionInUrl: true
+                            }
+                        }
+                    );
+                    
+                    // Token ni tekshirish
+                    await this.checkAuth();
+                    
+                    // WebSocket ulanish
+                    if (this.isAuthenticated) {
+                        await this.connectWebSocket();
+                    }
+                    
+                    // Dastlabki ma'lumotlarni yuklash
+                    await this.loadInitialData();
+                    
+                    // UI ni sozlash
+                    this.setupUI();
+                    this.setupEventListeners();
+                    this.createBackgroundParticles();
+                    
+                    // Dark mode ni tekshirish
+                    this.checkDarkModePreference();
+                    
+                    this.hideLoading();
+                    
+                    if (this.isAuthenticated) {
+                        this.showToast(`Xush kelibsiz, ${this.user.display_name}!`, 'success');
+                    } else {
+                        this.showAuthModal();
+                    }
+                    
+                    this.isInitialized = true;
+                    
+                } catch (error) {
+                    console.error('Ilovani ishga tushirishda xatolik:', error);
+                    this.hideLoading();
+                    this.showToast('Ilovani yuklashda xatolik', 'error');
+                    this.showAuthModal();
+                }
+            }
+
+            // ==================== AUTHENTICATION ====================
+
+            async checkAuth() {
+                try {
+                    const { data: { session }, error } = await this.supabase.auth.getSession();
+                    
+                    if (error) throw error;
+                    
+                    if (session) {
+                        this.token = session.access_token;
+                        this.user = session.user;
+                        this.isAuthenticated = true;
+                        
+                        // Foydalanuvchi ma'lumotlarini yuklash
+                        await this.loadUserProfile();
+                        return;
+                    }
+                    
+                    // LocalStorage dan foydalanuvchini tekshirish
+                    const storedUser = localStorage.getItem('xoleric_user');
+                    if (storedUser) {
+                        const userData = JSON.parse(storedUser);
+                        this.user = userData;
+                        this.isAuthenticated = true;
+                        await this.loadUserProfile();
+                    }
+                    
+                } catch (error) {
+                    console.error('Auth tekshirishda xatolik:', error);
+                    this.isAuthenticated = false;
+                }
+            }
+
+            async login(email, password) {
+                try {
+                    this.showLoading('Kirilmoqda...');
+                    
+                    const { data, error } = await this.supabase.auth.signInWithPassword({
+                        email: email,
+                        password: password
+                    });
+                    
+                    if (error) throw error;
+                    
+                    this.token = data.session.access_token;
+                    this.user = data.user;
+                    this.isAuthenticated = true;
+                    
+                    // WebSocket ga ulanish
+                    await this.connectWebSocket();
+                    
+                    // Profil ma'lumotlarini yuklash
+                    await this.loadUserProfile();
+                    
+                    // Saqlash
+                    localStorage.setItem('xoleric_user', JSON.stringify(this.user));
+                    localStorage.setItem('xoleric_token', this.token);
+                    
+                    this.closeAuthModal();
+                    this.hideLoading();
+                    this.showToast('Muvaffaqiyatli kirdingiz!', 'success');
+                    
+                    // Postlarni yangilash
+                    await this.loadPosts();
+                    
+                } catch (error) {
+                    this.hideLoading();
+                    this.showToast(error.message, 'error');
+                    throw error;
+                }
+            }
+
+            async register(userData) {
+                try {
+                    this.showLoading('Ro\'yxatdan o\'tilmoqda...');
+                    
+                    const { data, error } = await this.supabase.auth.signUp({
+                        email: userData.email,
+                        password: userData.password,
+                        options: {
+                            data: {
+                                display_name: userData.name,
+                                username: userData.username
+                            }
+                        }
+                    });
+                    
+                    if (error) throw error;
+                    
+                    // Users jadvaliga yozish
+                    const { error: dbError } = await this.supabase
+                        .from('users')
+                        .insert([{
+                            id: data.user.id,
+                            email: userData.email,
+                            username: userData.username,
+                            display_name: userData.name,
+                            avatar_url: null,
+                            bio: '',
+                            stats: JSON.stringify({
+                                posts: 0,
+                                followers: 0,
+                                following: 0,
+                                likes: 0,
+                                comments: 0
+                            }),
+                            settings: JSON.stringify({
+                                notifications: true,
+                                privacy: 'public',
+                                theme: 'auto',
+                                language: 'uz'
+                            }),
+                            created_at: new Date().toISOString()
+                        }]);
+                    
+                    if (dbError) throw dbError;
+                    
+                    this.hideLoading();
+                    this.showToast('Ro\'yxatdan o\'tdingiz! Emailni tasdiqlang.', 'success');
+                    this.setAuthTab('login');
+                    
+                } catch (error) {
+                    this.hideLoading();
+                    this.showToast(error.message, 'error');
+                    throw error;
+                }
+            }
+
+            async logout() {
+                try {
+                    await this.supabase.auth.signOut();
+                    
+                    if (this.socket) {
+                        this.socket.disconnect();
+                    }
+                    
+                    this.user = null;
+                    this.token = null;
+                    this.isAuthenticated = false;
+                    this.onlineUsers.clear();
+                    this.typingUsers.clear();
+                    
+                    localStorage.removeItem('xoleric_user');
+                    localStorage.removeItem('xoleric_token');
+                    
+                    this.showToast('Chiqdingiz', 'info');
+                    this.showAuthModal();
+                    
+                } catch (error) {
+                    console.error('Chiqishda xatolik:', error);
+                }
+            }
+
+            // ==================== WEBSOCKET ====================
+
+            async connectWebSocket() {
+                try {
+                    this.socket = io(Config.WS_URL, {
+                        auth: {
+                            token: this.token
+                        },
+                        transports: ['websocket', 'polling']
+                    });
+                    
+                    this.setupWebSocketListeners();
+                    
+                } catch (error) {
+                    console.error('WebSocket ulanishda xatolik:', error);
+                }
+            }
+
+            setupWebSocketListeners() {
+                if (!this.socket) return;
+                
+                this.socket.on('connect', () => {
+                    console.log('WebSocket ga ulandi');
+                    this.socket.emit('user_online', this.user.id);
+                });
+                
+                this.socket.on('user_online', (userId) => {
+                    this.onlineUsers.add(userId);
+                    this.updateOnlineStatus();
+                });
+                
+                this.socket.on('user_offline', (userId) => {
+                    this.onlineUsers.delete(userId);
+                    this.updateOnlineStatus();
+                });
+                
+                this.socket.on('typing_start', ({ userId, chatId }) => {
+                    this.typingUsers.set(chatId, userId);
+                    this.updateTypingIndicator(chatId);
+                });
+                
+                this.socket.on('typing_stop', ({ chatId }) => {
+                    this.typingUsers.delete(chatId);
+                    this.updateTypingIndicator(chatId);
+                });
+                
+                this.socket.on('new_message', (message) => {
+                    this.handleNewMessage(message);
+                });
+                
+                this.socket.on('new_notification', (notification) => {
+                    this.handleNewNotification(notification);
+                });
+                
+                this.socket.on('post_liked', ({ postId, userId }) => {
+                    this.handlePostLiked(postId, userId);
+                });
+                
+                this.socket.on('new_follower', (follower) => {
+                    this.handleNewFollower(follower);
+                });
+                
+                this.socket.on('disconnect', () => {
+                    console.log('WebSocket uzildi');
+                });
+            }
+
+            // ==================== POST FUNCTIONS ====================
+
+            async createPost() {
+                if (!this.checkRateLimit('posts')) {
+                    this.showToast('Juda tez post yozyapsiz, biroz kuting', 'warning');
+                    return;
+                }
+                
+                const postInput = document.getElementById('postInput');
+                const content = postInput.value.trim();
+                
+                if (!content) {
+                    this.showToast('Post matnini kiriting', 'error');
+                    return;
+                }
+                
+                if (content.length > Config.MAX_POST_LENGTH) {
+                    this.showToast(`Post ${Config.MAX_POST_LENGTH} belgidan oshmasligi kerak`, 'error');
+                    return;
+                }
+                
+                try {
+                    this.showLoading('Post yuklanmoqda...');
+                    
+                    // Hashtaglar va mentionlarni ajratish
+                    const hashtags = this.extractHashtags(content);
+                    const mentions = this.extractMentions(content);
+                    
+                    const postData = {
+                        user_id: this.user.id,
+                        content: content,
+                        metrics: {
+                            likes: 0,
+                            comments: 0,
+                            shares: 0,
+                            views: 0,
+                            reach: 0,
+                            engagement: 0
+                        },
+                        tags: hashtags,
+                        mentions: mentions,
+                        visibility: 'public',
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    };
+                    
+                    // Fayl yuklashni tekshirish
+                    const mediaInput = document.getElementById('postMediaInput');
+                    if (mediaInput && mediaInput.files.length > 0) {
+                        const mediaUrls = await this.uploadMedia(mediaInput.files);
+                        postData.media = mediaUrls;
+                    }
+                    
+                    // Poll ni tekshirish
+                    const pollData = this.getPollData();
+                    if (pollData) {
+                        postData.poll = pollData;
+                    }
+                    
+                    // NSFW tekshirish
+                    if (document.getElementById('nsfwToggle').checked) {
+                        postData.nsfw = true;
+                    }
+                    
+                    const { data: post, error } = await this.supabase
+                        .from('posts')
+                        .insert([postData])
+                        .select(`
+                            *,
+                            user:users(*)
+                        `)
+                        .single();
+
+                    if (error) throw error;
+                    
+                    // Mention qilingan foydalanuvchilarga bildirishnoma yuborish
+                    await this.sendMentionNotifications(mentions, post.id);
+                    
+                    // Postni ro'yxatga qo'shish
+                    this.posts.unshift(post);
+                    
+                    // UI ni yangilash
+                    this.renderPosts();
+                    
+                    // Profil statistikasini yangilash
+                    await this.updateUserStats('posts', 1);
+                    
+                    // Inputni tozalash
+                    postInput.value = '';
+                    document.getElementById('postSubmitBtn').disabled = true;
+                    document.getElementById('charCount').textContent = '0';
+                    
+                    // WebSocket orqali yangilash
+                    if (this.socket) {
+                        this.socket.emit('new_post', post);
+                    }
+                    
+                    this.hideLoading();
+                    this.showToast('Post muvaffaqiyatli yuklandi', 'success');
+                    
+                } catch (error) {
+                    console.error('Post yaratishda xatolik:', error);
+                    this.hideLoading();
+                    this.showToast('Xatolik yuz berdi', 'error');
+                }
+            }
+
+            async likePost(postId) {
+                if (!this.checkRateLimit('likes')) {
+                    return;
+                }
+                
+                try {
+                    // Post ma'lumotlarini olish
+                    const post = this.posts.find(p => p.id === postId);
+                    if (!post) return;
+                    
+                    const metrics = typeof post.metrics === 'string' 
+                        ? JSON.parse(post.metrics) 
+                        : post.metrics;
+                    
+                    // Avval like borligini tekshirish
+                    const { data: existingLike } = await this.supabase
+                        .from('likes')
+                        .select('id')
+                        .eq('user_id', this.user.id)
+                        .eq('post_id', postId)
+                        .single();
+
+                    if (existingLike) {
+                        // Like ni olib tashlash
+                        await this.supabase
+                            .from('likes')
+                            .delete()
+                            .eq('id', existingLike.id);
+                        
+                        metrics.likes = Math.max(0, (metrics.likes || 1) - 1);
+                        
+                        if (this.socket) {
+                            this.socket.emit('post_unliked', { postId, userId: this.user.id });
+                        }
+                        
+                    } else {
+                        // Like qo'shish
+                        await this.supabase
+                            .from('likes')
+                            .insert([{
+                                user_id: this.user.id,
+                                post_id: postId,
+                                created_at: new Date().toISOString()
+                            }]);
+                        
+                        metrics.likes = (metrics.likes || 0) + 1;
+                        
+                        // Bildirishnoma yaratish
+                        if (post.user_id !== this.user.id) {
+                            await this.createNotification(
+                                post.user_id,
+                                'like',
+                                this.user.id,
+                                postId
+                            );
+                        }
+                        
+                        if (this.socket) {
+                            this.socket.emit('post_liked', { postId, userId: this.user.id });
+                        }
+                    }
+                    
+                    // Postni yangilash
+                    post.metrics = metrics;
+                    await this.supabase
+                        .from('posts')
+                        .update({ metrics: JSON.stringify(metrics) })
+                        .eq('id', postId);
+                    
+                    // UI ni yangilash
+                    this.renderPosts();
+                    
+                } catch (error) {
+                    console.error('Like qilishda xatolik:', error);
+                }
+            }
+
+            // ==================== COMMENT FUNCTIONS ====================
+
+            async addComment() {
+                const commentInput = document.getElementById('commentInput');
+                const content = commentInput.value.trim();
+                
+                if (!content) return;
+                
+                if (!this.checkRateLimit('comments')) {
+                    this.showToast('Juda tez izoh yozyapsiz', 'warning');
+                    return;
+                }
+                
+                try {
+                    const commentData = {
+                        user_id: this.user.id,
+                        post_id: this.currentPostId,
+                        content: content,
+                        metrics: {
+                            likes: 0
+                        },
+                        created_at: new Date().toISOString()
+                    };
+                    
+                    const { data: comment, error } = await this.supabase
+                        .from('comments')
+                        .insert([commentData])
+                        .select(`
+                            *,
+                            user:users(*)
+                        `)
+                        .single();
+                    
+                    if (error) throw error;
+                    
+                    // Post metrics ni yangilash
+                    const post = this.posts.find(p => p.id === this.currentPostId);
+                    if (post) {
+                        const metrics = typeof post.metrics === 'string' 
+                            ? JSON.parse(post.metrics) 
+                            : post.metrics;
+                        metrics.comments = (metrics.comments || 0) + 1;
+                        
+                        await this.supabase
+                            .from('posts')
+                            .update({ metrics: JSON.stringify(metrics) })
+                            .eq('id', this.currentPostId);
+                        
+                        post.metrics = metrics;
+                    }
+                    
+                    // Bildirishnoma yuborish
+                    if (post && post.user_id !== this.user.id) {
+                        await this.createNotification(
+                            post.user_id,
+                            'comment',
+                            this.user.id,
+                            this.currentPostId
+                        );
+                    }
+                    
+                    // Izohlar ro'yxatini yangilash
+                    await this.loadComments(this.currentPostId);
+                    
+                    // Inputni tozalash
+                    commentInput.value = '';
+                    
+                } catch (error) {
+                    console.error('Izoh qo\'shishda xatolik:', error);
+                    this.showToast('Xatolik yuz berdi', 'error');
+                }
+            }
+
+            // ==================== CHAT FUNCTIONS ====================
+
+            async sendChatMessage() {
+                const chatInput = document.getElementById('chatInput');
+                const message = chatInput.value.trim();
+                
+                if (!message) return;
+                
+                try {
+                    const messageData = {
+                        sender_id: this.user.id,
+                        receiver_id: this.currentChatUser,
+                        content: message,
+                        read: false,
+                        created_at: new Date().toISOString()
+                    };
+                    
+                    // WebSocket orqali yuborish
+                    if (this.socket) {
+                        this.socket.emit('send_message', messageData);
+                    }
+                    
+                    // UI ga qo'shish
+                    this.addMessageToChat(messageData);
+                    
+                    // Inputni tozalash
+                    chatInput.value = '';
+                    
+                    // Typing to'xtatish
+                    if (this.socket) {
+                        this.socket.emit('typing_stop', {
+                            chatId: this.currentChatUser
+                        });
+                    }
+                    
+                } catch (error) {
+                    console.error('Xabar yuborishda xatolik:', error);
+                }
+            }
+
+            // ==================== STORY FUNCTIONS ====================
+
+            async createStory() {
+                try {
+                    const mediaInput = document.getElementById('storyMediaInput');
+                    if (!mediaInput || mediaInput.files.length === 0) return;
+                    
+                    const file = mediaInput.files[0];
+                    const mediaUrl = await this.uploadMedia([file]);
+                    
+                    const storyData = {
+                        user_id: this.user.id,
+                        media_url: mediaUrl[0],
+                        duration: 24 * 60 * 60 * 1000, // 24 soat
+                        created_at: new Date().toISOString()
+                    };
+                    
+                    const { error } = await this.supabase
+                        .from('stories')
+                        .insert([storyData]);
+                    
+                    if (error) throw error;
+                    
+                    // WebSocket orqali yangilash
+                    if (this.socket) {
+                        this.socket.emit('new_story', storyData);
+                    }
+                    
+                    this.showToast('Story yuklandi', 'success');
+                    
+                } catch (error) {
+                    console.error('Story yaratishda xatolik:', error);
+                    this.showToast('Xatolik yuz berdi', 'error');
+                }
+            }
+
+            // ==================== UTILITY FUNCTIONS ====================
+
+            checkRateLimit(type) {
+                const now = Date.now();
+                const key = `${type}_${this.user.id}`;
+                
+                if (!this.rateLimitCounters.has(key)) {
+                    this.rateLimitCounters.set(key, []);
+                }
+                
+                const timestamps = this.rateLimitCounters.get(key);
+                
+                // Eskilarni olib tashlash
+                const timeLimit = 60 * 1000; // 1 daqiqa
+                const validTimestamps = timestamps.filter(t => now - t < timeLimit);
+                
+                const limit = Config.RATE_LIMIT[type.toUpperCase()] || 10;
+                
+                if (validTimestamps.length >= limit) {
+                    return false;
+                }
+                
+                validTimestamps.push(now);
+                this.rateLimitCounters.set(key, validTimestamps);
+                return true;
+            }
+
+            async uploadMedia(files) {
+                const urls = [];
+                
+                for (const file of files) {
+                    // Bu yerda siz Supabase Storage ga yuklashingiz kerak
+                    const fileName = `${Date.now()}_${file.name}`;
+                    
+                    const { data, error } = await this.supabase.storage
+                        .from('media')
+                        .upload(fileName, file);
+                    
+                    if (error) throw error;
+                    
+                    const { data: { publicUrl } } = this.supabase.storage
+                        .from('media')
+                        .getPublicUrl(fileName);
+                    
+                    urls.push(publicUrl);
+                }
+                
+                return urls;
+            }
+
+            // ==================== UI FUNCTIONS ====================
+
+            setupUI() {
+                // Character counter
+                const postInput = document.getElementById('postInput');
+                const charCounter = document.getElementById('charCounter');
+                const charCount = document.getElementById('charCount');
+                const postBtn = document.getElementById('postSubmitBtn');
+                
+                if (postInput && charCounter && charCount && postBtn) {
+                    postInput.addEventListener('input', () => {
+                        const length = postInput.value.length;
+                        charCount.textContent = length;
+                        
+                        if (length > Config.MAX_POST_LENGTH * 0.9) {
+                            charCounter.classList.add('warning');
+                        } else {
+                            charCounter.classList.remove('warning');
+                        }
+                        
+                        if (length > Config.MAX_POST_LENGTH) {
+                            charCounter.classList.add('error');
+                        } else {
+                            charCounter.classList.remove('error');
+                        }
+                        
+                        postBtn.disabled = length === 0 || length > Config.MAX_POST_LENGTH;
+                    });
+                }
+                
+                // Search input uchun event listener
+                const searchInput = document.getElementById('searchInput');
+                let searchTimeout;
+                
+                if (searchInput) {
+                    searchInput.addEventListener('input', () => {
+                        clearTimeout(searchTimeout);
+                        searchTimeout = setTimeout(() => {
+                            this.searchContent();
+                        }, Config.DEBOUNCE_DELAY);
+                    });
+                }
+                
+                // Typing detection
+                const chatInput = document.getElementById('chatInput');
+                let typingTimeout;
+                
+                if (chatInput) {
+                    chatInput.addEventListener('input', () => {
+                        if (this.socket && this.currentChatUser) {
+                            this.socket.emit('typing_start', {
+                                chatId: this.currentChatUser
+                            });
+                            
+                            clearTimeout(typingTimeout);
+                            typingTimeout = setTimeout(() => {
+                                this.socket.emit('typing_stop', {
+                                    chatId: this.currentChatUser
+                                });
+                            }, 1000);
+                        }
+                    });
+                }
+                
+                // Emoji pickerni yuklash
+                this.loadEmojiPicker();
+                
+                // Voice recording
+                this.setupVoiceRecording();
+            }
+
+            setupVoiceRecording() {
+                if (!navigator.mediaDevices || !window.MediaRecorder) {
+                    console.warn('Voice recording qo\'llab-quvvatlanmaydi');
+                    return;
+                }
+                
+                const voiceBtn = document.getElementById('voiceMessageBtn');
+                if (voiceBtn) {
+                    voiceBtn.addEventListener('mousedown', () => this.startVoiceRecording());
+                    voiceBtn.addEventListener('mouseup', () => this.stopVoiceRecording());
+                    voiceBtn.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        this.startVoiceRecording();
+                    });
+                    voiceBtn.addEventListener('touchend', () => this.stopVoiceRecording());
+                }
+            }
+
+            async startVoiceRecording() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    this.mediaRecorder = new MediaRecorder(stream);
+                    this.audioChunks = [];
+                    
+                    this.mediaRecorder.addEventListener('dataavailable', (event) => {
+                        this.audioChunks.push(event.data);
+                    });
+                    
+                    this.mediaRecorder.addEventListener('stop', () => {
+                        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                        this.sendVoiceMessage(audioBlob);
+                    });
+                    
+                    this.mediaRecorder.start();
+                    this.isRecording = true;
+                    
+                    // UI ni yangilash
+                    const voiceBtn = document.getElementById('voiceMessageBtn');
+                    if (voiceBtn) {
+                        voiceBtn.classList.add('recording');
+                    }
+                    
+                } catch (error) {
+                    console.error('Voice recordingda xatolik:', error);
+                    this.showToast('Mikrofonga ruxsat bering', 'error');
+                }
+            }
+
+            stopVoiceRecording() {
+                if (this.mediaRecorder && this.isRecording) {
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+                    
+                    // UI ni yangilash
+                    const voiceBtn = document.getElementById('voiceMessageBtn');
+                    if (voiceBtn) {
+                        voiceBtn.classList.remove('recording');
+                    }
+                    
+                    // Streamni to'xtatish
+                    this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                }
+            }
+
+            // ==================== DARK MODE ====================
+
+            checkDarkModePreference() {
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const savedTheme = localStorage.getItem('xoleric_theme');
+                
+                if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+                    this.enableDarkMode();
+                } else {
+                    this.disableDarkMode();
+                }
+            }
+
+            toggleDarkMode() {
+                if (document.body.classList.contains('light-mode')) {
+                    this.enableDarkMode();
+                } else {
+                    this.disableDarkMode();
+                }
+            }
+
+            enableDarkMode() {
+                document.body.classList.remove('light-mode');
+                localStorage.setItem('xoleric_theme', 'dark');
+            }
+
+            disableDarkMode() {
+                document.body.classList.add('light-mode');
+                localStorage.setItem('xoleric_theme', 'light');
+            }
+
+            // ... Qolgan funksiyalar ...
+
+            // ==================== MODAL FUNCTIONS ====================
+
+            showAuthModal() {
+                this.openModal('authModal');
+            }
+
+            closeAuthModal() {
+                this.closeModal('authModal');
+            }
+
+            setAuthTab(tab) {
+                const loginForm = document.getElementById('loginForm');
+                const registerForm = document.getElementById('registerForm');
+                
+                document.querySelectorAll('.auth-tabs .search-tab').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                
+                if (tab === 'login') {
+                    loginForm.style.display = 'block';
+                    registerForm.style.display = 'none';
+                    document.querySelector('.auth-tabs button:nth-child(1)').classList.add('active');
+                } else {
+                    loginForm.style.display = 'none';
+                    registerForm.style.display = 'block';
+                    document.querySelector('.auth-tabs button:nth-child(2)').classList.add('active');
+                }
+            }
+
+            // ==================== FORM HANDLERS ====================
+
+            setupFormHandlers() {
+                // Login form
+                const loginForm = document.getElementById('loginForm');
+                if (loginForm) {
+                    loginForm.addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        
+                        const email = document.getElementById('loginEmail').value;
+                        const password = document.getElementById('loginPassword').value;
+                        
+                        try {
+                            await this.login(email, password);
+                        } catch (error) {
+                            console.error('Login error:', error);
+                        }
+                    });
+                }
+                
+                // Register form
+                const registerForm = document.getElementById('registerForm');
+                if (registerForm) {
+                    registerForm.addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        
+                        const userData = {
+                            name: document.getElementById('registerName').value,
+                            email: document.getElementById('registerEmail').value,
+                            username: document.getElementById('registerUsername').value,
+                            password: document.getElementById('registerPassword').value,
+                            confirmPassword: document.getElementById('registerConfirmPassword').value
+                        };
+                        
+                        // Validation
+                        if (userData.password !== userData.confirmPassword) {
+                            this.showToast('Parollar mos kelmadi', 'error');
+                            return;
+                        }
+                        
+                        try {
+                            await this.register(userData);
+                        } catch (error) {
+                            console.error('Register error:', error);
+                        }
+                    });
+                }
+            }
+
+            // ... Boshqa funksiyalar ...
+
+        }
+
+        // ==================== ILOVA ISHGA TUSHIRISH ====================
+        document.addEventListener('DOMContentLoaded', () => {
+            // App instansiyasini yaratish
+            const app = new XolericApp();
+            
+            // Ilovani ishga tushirish
+            app.init();
+            
+            // Form handlerlarni ishga tushirish
+            app.setupFormHandlers();
+            
+            // Global error handling
+            window.addEventListener('error', (e) => {
+                console.error('Global error:', e.error);
+                app.showToast('Xatolik yuz berdi', 'error');
+            });
+            
+            window.addEventListener('unhandledrejection', (e) => {
+                console.error('Unhandled promise rejection:', e.reason);
+                app.showToast('Xatolik yuz berdi', 'error');
+            });
+            
+            // Online/offline detection
+            window.addEventListener('online', () => {
+                app.showToast('Onlayn rejim', 'success');
+            });
+            
+            window.addEventListener('offline', () => {
+                app.showToast('Offline rejim', 'warning');
+            });
+        });
+    </script>
+</body>
+</html>
