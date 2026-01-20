@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  lock-fixer:
+    image: node:18-alpine
+    container_name: xoleric-lock-fixer
+    working_dir: /app
+    volumes:
+      - ./frontend:/app/frontend
+      - ./backend:/app/backend
+      - ./fix-lock-files.sh:/app/fix-lock-files.sh
+    environment:
+      - NODE_ENV=production
+      - CI=true
+    command: >
+      sh -c '
+      apk add --no-cache jq &&
+      chmod +x /app/fix-lock-files.sh &&
+      /app/fix-lock-files.sh
+      '
+    networks:
+      - xoleric-network
+
+  lock-validator:
+    image: node:18-alpine
+    container_name: xoleric-lock-validator
+    working_dir: /app
+    volumes:
+      - ./frontend:/app/frontend
+      - ./backend:/app/backend
+    depends_on:
+      - lock-fixer
+    environment:
+      - NODE_ENV=production
+    command: >
+      sh -c '
+      echo "Validating lock files..." &&
+      cd /app/frontend &&
+      if [ -f "package-lock.json" ]; then
+        if jq empty package-lock.json >/dev/null 2>&1; then
+          echo "✅ Frontend lock file is valid" &&
+          npm ls --production --depth=0
+        else
+          echo "❌ Frontend lock file is invalid" &&
+          exit 1
+        fi
+      fi &&
+      cd /app/backend &&
+      if [ -f "package-lock.json" ]; then
+        if jq empty package-lock.json >/dev/null 2>&1; then
+          echo "✅ Backend lock file is valid" &&
+          npm ls --production --depth=0
+        else
+          echo "❌ Backend lock file is invalid" &&
+          exit 1
+        fi
+      fi
+      '
+    networks:
+      - xoleric-network
+
+  dependency-audit:
+    image: node:18-alpine
+    container_name: xoleric-dependency-audit
+    working_dir: /app
+    volumes:
+      - ./frontend:/app/frontend
+      - ./backend:/app/backend
+    depends_on:
+      - lock-validator
+    environment:
+      - NODE_ENV=production
+    command: >
+      sh -c '
+      echo "Running security audit..." &&
+      cd /app/frontend &&
+      echo "=== FRONTEND AUDIT ===" &&
+      npm audit --production --json > frontend-audit.json 2>/dev/null || true &&
+      cd /app/backend &&
+      echo "=== BACKEND AUDIT ===" &&
+      npm audit --production --json > backend-audit.json 2>/dev/null || true &&
+      echo "✅ Audit completed"
+      '
+    networks:
+      - xoleric-network
+
+networks:
+  xoleric-network:
+    driver: bridge
