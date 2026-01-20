@@ -1,0 +1,294 @@
+version: '3.8'
+
+services:
+  # Traefik reverse proxy
+  traefik:
+    image: traefik:v3.0
+    container_name: xoleric-traefik
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080" # Dashboard
+    networks:
+      - xoleric-network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml
+      - ./letsencrypt:/letsencrypt
+      - ./traefik.log:/traefik.log
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=admin@xoleric.net"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      - "--log.filePath=/traefik.log"
+      - "--log.level=INFO"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.xoleric.net`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=myresolver"
+
+  # Frontend service
+  frontend:
+    image: ghcr.io/your-org/xoleric-frontend:latest
+    container_name: xoleric-frontend
+    restart: always
+    networks:
+      - xoleric-network
+    depends_on:
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`xoleric.net`) || Host(`www.xoleric.net`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.routers.frontend-secure.rule=Host(`xoleric.net`) || Host(`www.xoleric.net`)"
+      - "traefik.http.routers.frontend-secure.entrypoints=websecure"
+      - "traefik.http.routers.frontend-secure.tls.certresolver=myresolver"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API service
+  backend:
+    image: ghcr.io/your-org/xoleric-backend:latest
+    container_name: xoleric-backend
+    restart: always
+    networks:
+      - xoleric-network
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - FRONTEND_URL=https://xoleric.net
+      - BACKEND_URL=https://api.xoleric.net
+      - WS_URL=wss://ws.xoleric.net
+    volumes:
+      - uploads:/app/uploads
+      - logs:/app/logs
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`api.xoleric.net`)"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls.certresolver=myresolver"
+      - "traefik.http.services.backend.loadbalancer.server.port=5000"
+      - "traefik.http.routers.backend-ws.rule=Host(`ws.xoleric.net`)"
+      - "traefik.http.routers.backend-ws.entrypoints=websecure"
+      - "traefik.http.routers.backend-ws.tls.certresolver=myresolver"
+      - "traefik.http.services.backend-ws.loadbalancer.server.port=5000"
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: xoleric-postgres
+    restart: always
+    networks:
+      - xoleric-network
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d
+      - ./backup:/backup
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Redis cache
+  redis:
+    image: redis:7-alpine
+    container_name: xoleric-redis
+    restart: always
+    networks:
+      - xoleric-network
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Monitoring stack
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: xoleric-prometheus
+    restart: always
+    networks:
+      - xoleric-network
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`monitor.xoleric.net`)"
+      - "traefik.http.routers.prometheus.entrypoints=websecure"
+      - "traefik.http.routers.prometheus.tls.certresolver=myresolver"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: xoleric-grafana
+    restart: always
+    networks:
+      - xoleric-network
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.xoleric.net`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certresolver=myresolver"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    depends_on:
+      - prometheus
+
+  # Elasticsearch for logging
+  elasticsearch:
+    image: elasticsearch:8.10.0
+    container_name: xoleric-elasticsearch
+    restart: always
+    networks:
+      - xoleric-network
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Logstash
+  logstash:
+    image: logstash:8.10.0
+    container_name: xoleric-logstash
+    restart: always
+    networks:
+      - xoleric-network
+    volumes:
+      - ./monitoring/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    depends_on:
+      - elasticsearch
+
+  # Kibana
+  kibana:
+    image: kibana:8.10.0
+    container_name: xoleric-kibana
+    restart: always
+    networks:
+      - xoleric-network
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kibana.rule=Host(`logs.xoleric.net`)"
+      - "traefik.http.routers.kibana.entrypoints=websecure"
+      - "traefik.http.routers.kibana.tls.certresolver=myresolver"
+      - "traefik.http.services.kibana.loadbalancer.server.port=5601"
+    depends_on:
+      - elasticsearch
+
+  # Backup service
+  backup:
+    image: postgres:15-alpine
+    container_name: xoleric-backup
+    restart: on-failure
+    networks:
+      - xoleric-network
+    volumes:
+      - ./backup:/backup
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - postgres
+    command: >
+      sh -c '
+      echo "*/15 * * * * pg_dump -h postgres -U $${DB_USER} $${DB_NAME} | gzip > /backup/backup_$$(date +%Y%m%d_%H%M%S).sql.gz" > /etc/crontabs/root &&
+      crond -f
+      '
+    environment:
+      DB_USER: ${DB_USER}
+      DB_NAME: ${DB_NAME}
+      PGPASSWORD: ${DB_PASSWORD}
+
+  # Watchtower for auto-updates
+  watchtower:
+    image: containrrr/watchtower
+    container_name: xoleric-watchtower
+    restart: always
+    networks:
+      - xoleric-network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 30 --cleanup --label-enable
+    environment:
+      WATCHTOWER_POLL_INTERVAL: 300
+      WATCHTOWER_CLEANUP: true
+      WATCHTOWER_LABEL_ENABLE: true
+
+networks:
+  xoleric-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres-data:
+  redis-data:
+  uploads:
+  logs:
+  prometheus-data:
+  grafana-data:
+  elasticsearch-data:
